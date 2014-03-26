@@ -86,6 +86,16 @@
     return [[[XVimInsertEvaluator alloc] initWithWindow:self.window] autorelease];
 }
 
+- (XVimEvaluator*)C_a{
+    NSTextView* view = [self sourceView];
+    if ([view xvim_incrementNumber:(int64_t)self.numericArg]) {
+        [[XVim instance] fixOperationCommands];
+    } else {
+        [[XVim instance] cancelOperationCommands];
+    }
+    return nil;
+}
+
 // This is not motion but scroll. That's the reason the implementation is here.
 - (XVimEvaluator*)C_b{
     [[self sourceView] xvim_scrollPageBackward:[self numericArg]];
@@ -221,6 +231,7 @@
     NSTextView* view = [self sourceView];
     XVimRegister* reg = [[[XVim instance] registerManager] registerByName:self.yankRegister];
     [view xvim_put:reg.string withType:reg.type afterCursor:YES count:[self numericArg]];
+    [[XVim instance] fixOperationCommands];
     return nil;
 }
 
@@ -228,6 +239,7 @@
     NSTextView* view = [self sourceView];
     XVimRegister* reg = [[[XVim instance] registerManager] registerByName:self.yankRegister];
     [view xvim_put:reg.string withType:reg.type afterCursor:NO count:[self numericArg]];
+    [[XVim instance] fixOperationCommands];
     return nil;
 }
 
@@ -336,6 +348,17 @@
     XVimDeleteEvaluator* eval = [[[XVimDeleteEvaluator alloc] initWithWindow:self.window insertModeAtCompletion:NO] autorelease];
     eval.parent = self;
     return [eval performSelector:@selector(h)];
+}
+
+- (XVimEvaluator*)C_x{
+    NSTextView* view = [self sourceView];
+
+    if ([view xvim_incrementNumber:-(int64_t)self.numericArg]) {
+        [[XVim instance] fixOperationCommands];
+    } else {
+        [[XVim instance] cancelOperationCommands];
+    }
+    return nil;
 }
 
 - (XVimEvaluator*)Y{
