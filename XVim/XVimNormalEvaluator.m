@@ -76,14 +76,11 @@
 // Command which results in cursor motion should be implemented in XVimMotionEvaluator
 
 - (XVimEvaluator*)a{
-    [[self sourceView] xvim_append];
-	return [[[XVimInsertEvaluator alloc] initWithWindow:self.window] autorelease];
+	return [[[XVimInsertEvaluator alloc] initWithWindow:self.window oneCharMode:NO mode:XVIM_INSERT_APPEND] autorelease];
 }
 
 - (XVimEvaluator*)A{
-    NSTextView* view = [self sourceView];
-    [view xvim_appendAtEndOfLine];
-    return [[[XVimInsertEvaluator alloc] initWithWindow:self.window] autorelease];
+    return [[[XVimInsertEvaluator alloc] initWithWindow:self.window oneCharMode:NO mode:XVIM_INSERT_APPEND_EOL] autorelease];
 }
 
 - (XVimEvaluator*)C_a{
@@ -150,9 +147,9 @@
     // process
     XVimWindow* window = self.window;
     NSRange range = [[window sourceView] selectedRange];
-    NSUInteger numberOfLines = [window.sourceView.textStorage numberOfLines];
+    NSUInteger numberOfLines = [window.sourceView.textStorage xvim_numberOfLines];
     long long lineNumber = [window.sourceView currentLineNumber];
-    NSUInteger columnNumber = [window.sourceView.textStorage columnNumber:range.location];
+    NSUInteger columnNumber = [window.sourceView.textStorage xvim_columnOfIndex:range.location];
     NSURL* documentURL = [[window sourceView] documentURL];
 	if( [documentURL isFileURL] ) {
 		NSString* filename = [documentURL path];
@@ -188,12 +185,11 @@
 }
 
 - (XVimEvaluator*)I{
-    [[self sourceView] xvim_insertBeforeFirstNonblank];
-    return [[[XVimInsertEvaluator alloc] initWithWindow:self.window] autorelease];
+    return [[[XVimInsertEvaluator alloc] initWithWindow:self.window oneCharMode:NO mode:XVIM_INSERT_BEFORE_FIRST_NONBLANK] autorelease];
 }
 
 - (XVimEvaluator*)J{
-    XVimJoinEvaluator* eval = [[[XVimJoinEvaluator alloc] initWithWindow:self.window] autorelease];
+    XVimJoinEvaluator* eval = [[[XVimJoinEvaluator alloc] initWithWindow:self.window addSpace:YES] autorelease];
     return [eval executeOperationWithMotion:XVIM_MAKE_MOTION(MOTION_NONE, CHARACTERWISE_EXCLUSIVE, MOTION_OPTION_NONE, self.numericArg)];
 }
 
@@ -276,7 +272,7 @@
 
 - (XVimEvaluator*)r{
 	[self.argumentString appendString:@"r"];
-    return [[[XVimInsertEvaluator alloc] initWithWindow:self.window oneCharMode:YES] autorelease];
+    return [[[XVimInsertEvaluator alloc] initWithWindow:self.window oneCharMode:YES mode:XVIM_INSERT_DEFAULT] autorelease];
 }
 
 - (XVimEvaluator*)s{
@@ -490,6 +486,7 @@
             continue;
         }
         nonNumFound = YES;
+        TRACE_LOG("Feeding stroke: %@", stroke);
         [self.window handleKeyStroke:stroke onStack:stack];
     }
     [[XVim instance] endRepeat];
