@@ -30,6 +30,8 @@
 #import <string.h>
 #import "NSTextView+VimOperation.h"
 
+#import "XVimInsertEvaluator.h"
+
 @implementation DVTSourceTextViewHook
 
 + (void)hook:(NSString*)method{
@@ -62,6 +64,7 @@
     [self hook:@"viewDidMoveToSuperview"];
     [self hook:@"shouldChangeTextInRange:replacementString"];
     [self hook:@"observeValueForKeyPath:ofObject:change:context:"];
+    [self hook:@"shouldAutoCompleteAtLocation:"];
 }
 
 + (void)unhook{
@@ -81,13 +84,14 @@
     [self unhook:@"mouseDown:"];
     [self unhook:@"drawRect:"];
     [self unhook:@"_drawInsertionPointInRect:color:"];
-    [self unhook:@"_drawInsertionPointInRect:color:turnedOn:"];
+    [self unhook:@"drawInsertionPointInRect:color:turnedOn:"];
     [self unhook:@"didChangeText"];
     [self unhook:@"viewDidMoveToSuperview"];
     [self unhook:@"shouldChangeTextInRange:replacementString"];
     // We do not unhook this too. Since "addObserver" is called in initWithCoder we should keep this hook
     // (Calling observerValueForKeyPath in NSObject results in throwing exception)
     //[self unhook:@"observeValueForKeyPath:ofObject:change:context:"];
+    [self unhook:@"shouldAutoCompleteAtLocation:"];
 }
 
 #ifdef __XCODE5__
@@ -153,6 +157,7 @@
 - (void)setSelectedRanges:(NSArray *)ranges affinity:(NSSelectionAffinity)affinity stillSelecting:(BOOL)flag{
     [(DVTSourceTextView*)self setSelectedRanges_:ranges affinity:affinity stillSelecting:flag];
     [(NSTextView*)self xvim_syncStateFromView];
+    [(NSTextView*)self setNeedsDisplay:YES];
 }
 
 - (void)selectAll:(id)sender{
@@ -259,17 +264,15 @@
 - (void)_drawInsertionPointInRect:(NSRect)aRect color:(NSColor*)aColor{
     @try{
         DVTSourceTextView *base = (DVTSourceTextView*)self;
-         XVimWindow* window = [base xvimWindow];
-        
-        // We do not call original _darawInsertionPointRect here
-        // Because it uses NSRectFill to draw the caret which overrides the character entirely.
-        // We want some tranceparency for the caret.
-        
-        // [base _drawInsertionPointInRect_:glyphRect color:aColor];
-        
-        // Call our drawing method
-        [window drawInsertionPointInRect:aRect color:aColor];
-        
+        XVimWindow* window = [base xvimWindow];
+        TRACE_LOG(@"_drawInsertionPointInRect");
+        [base drawRect:[base visibleRect]];
+        if( [[[window currentEvaluator] class] isSubclassOfClass:[XVimInsertEvaluator class]]){
+            // Use original behavior when insert mode.
+            [base _drawInsertionPointInRect_:aRect color:aColor];
+        }else{
+            [window drawInsertionPointInRect:aRect color:aColor];
+        }
     }@catch (NSException* exception) {
         ERROR_LOG(@"Exception %@: %@", [exception name], [exception reason]);
         [Logger logStackTrace:exception];
@@ -277,19 +280,32 @@
 }
 
 - (void)drawInsertionPointInRect:(NSRect)rect color:(NSColor *)color turnedOn:(BOOL)flag{
-    DVTSourceTextView *base = (DVTSourceTextView*)self;
-    // Call super class first.
-    [base drawInsertionPointInRect_:rect color:color turnedOn:flag];
-    // Then tell the view to redraw to clear a caret.
-    if( !flag ){
-        [base setNeedsDisplay:YES];
-    }
+        DVTSourceTextView *base = (DVTSourceTextView*)self;
+        XVimWindow* window = [base xvimWindow];
+        if( [[[window currentEvaluator] class] isSubclassOfClass:[XVimInsertEvaluator class]]){
+            // Use original behavior when insert mode.
+            [base drawInsertionPointInRect_:rect color:color turnedOn:flag];
+        }else{
+            if( [[[XVim instance] options] blinkcursor] ){
+                if(!flag){
+                    // Clear caret
+                    [base drawRect:[base visibleRect]];    
+                }
+                // Call original(This eventually calls _drawInsertionPointInRect:color: if flag is YES)
+                [base drawInsertionPointInRect_:rect color:color turnedOn:flag];
+            }
+        }
 }
-
 - (void)didChangeText{
     DVTSourceTextView *base = (DVTSourceTextView*)self;
     [base setNeedsUpdateFoundRanges:YES];
     [base didChangeText_];
+}
+
+- (BOOL)shouldAutoCompleteAtLocation:(unsigned long long)location{
+    DVTSourceTextView *base = (DVTSourceTextView*)self;
+    XVimWindow* window = [base xvimWindow];
+    return [window shouldAutoCompleteAtLocation:(unsigned long long)location];
 }
 
 - (void)viewDidMoveToSuperview {
