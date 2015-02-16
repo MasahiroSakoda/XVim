@@ -25,10 +25,13 @@
 }
 
 - (XVimEvaluator*)eval:(XVimKeyStroke*)keyStroke{
-	SEL handler = [keyStroke selectorForInstance:self];
-	if (handler){
+	SEL handler = keyStroke.selector;
+	if ([self respondsToSelector:handler]) {
 		TRACE_LOG(@"Calling SELECTOR %@", NSStringFromSelector(handler));
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
         return [self performSelector:handler];
+#pragma clang diagnostic pop
     }
 
     if( keyStroke.modifier == 0 ){
